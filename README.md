@@ -2,6 +2,8 @@
 
 *Part of the [Vivaminima tools](https://github.com/vivaminima) for Claude Code users.*
 
+<img src="https://raw.githubusercontent.com/vivaminima/vivaminima/main/img/run/inbox-ledger.png" width="760" alt="inbox-ledger: real output of the free version on a made-up sample">
+
 Turn a folder of JSON messages into an append-only log you can trust: nothing counted twice,
 nothing silently lost, and any later edit to the log is detectable.
 
