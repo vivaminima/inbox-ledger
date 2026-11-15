@@ -89,7 +89,7 @@ shared without sharing the content.
 | Only the last line is half-written (a run was stopped mid-write) | `ingest` repairs it by itself: the cut-off bytes go to `ledger.jsonl.torn`, a `TAIL_REPAIRED` record is added, and new messages go into the same file. `verify` and `status` only report it; they never change the file |
 | The last record is complete but lacks its final newline | Not damage: the next `ingest` adds the newline and continues |
 | Someone edits or deletes a record | `verify` and `status` report it: each record carries its own hash and the previous record's hash |
-| Two runs start at once | A lock file makes them take turns (tested with 8 processes, 60 messages) |
+| Two runs start at once | A lock file makes them take turns. A run that cannot get the lock waits and tries again (up to `--lock-wait` seconds); it does not fail on the first refusal. Tested with 8 and with 12 processes at once |
 | You run `recover` | A clean, re-chained copy is written; the original is untouched; messages whose records were lost are received again on the next ingest |
 
 Why ingest stops on damage: the unreadable line may be the record of a message that is still in the inbox.
@@ -121,6 +121,11 @@ ingest --lock-wait SECONDS     how long to wait for another run (default 30)
 Exit codes: `0` success, `1` the ledger is damaged (`verify`, `status` and `ingest` all report it),
 `2` bad path, lock timeout or other error.
 
+When the folder of your ledger holds two or more ledgers, `ingest` and `status` end with one line that says how
+many, for example `2 ledgers found. Cross-window summary and mirror gap check are in the Pro report.` It is
+printed after the JSON, on stderr, so stdout stays plain JSON. A `recover` copy or a plain file copy of a ledger is
+not counted as another ledger. With one ledger nothing is printed.
+
 `status` always starts with an `integrity` line. It reports damaged lines, broken links between records
 and a half-written last line, so a summary can never look healthy while `verify` would fail.
 
@@ -146,10 +151,12 @@ python -X utf8 ledger.py status data/ledger.jsonl
 
 Python 3 standard library only - nothing to install.
 
-- Tested: Windows 11, Python 3.10.11 (this release, 37 tests, including a cp949 console run).
+- Tested: Windows 11, Python 3.10.11 (this release, 49 tests, including a cp949 console run).
+- Known issue: on one Windows machine the 8-process test of 1.0.3 failed once in 30 runs. 1.0.4 makes a waiting
+  run retry instead of failing; after the change the same test passed 30 of 30 runs on Windows 11. If you still see
+  it fail, raise `--lock-wait`; no record is lost either way.
 - Version 1.0.2 was tested on Linux, Python 3.13; 1.0.0 was also run on Windows with Python 3.10 by an independent reviewer.
 - Other versions and platforms have not been tested.
-- Known flaky test: the 8-process lock test (`test_eight_concurrent_processes_no_duplicates_no_loss`) failed once in 30 runs on Windows; the other 29 passed. Likely cause: one of the 8 processes timed out waiting for the lock. Fix planned in 1.0.4.
 
 Run the tests yourself with `python -m unittest discover -s tests`.
 
@@ -157,5 +164,7 @@ MIT licence. See CHANGELOG.md for what changed.
 
 ## More from Vivaminima
 
-- **Token Audit Kit ($19)** — see how many tokens your CLAUDE.md and its @imports cost before your first prompt, and a step-by-step guide to split it. Free script: https://github.com/vivaminima/claude-md-audit · Paid kit: https://vivaminima.lemonsqueezy.com/checkout/buy/57973270-94ea-4cc7-bcb4-294693714087
-- Free tools: [skill-audit-kit](https://github.com/vivaminima/skill-audit-kit) · [secret-map](https://github.com/vivaminima/secret-map) · [inbox-ledger](https://github.com/vivaminima/inbox-ledger)
+- **Token Audit Kit ($19)** — see how many tokens your CLAUDE.md and its @imports cost before your first prompt, and a step-by-step guide to split it. Free script: https://github.com/vivaminima/context-file-audit · Paid kit: https://vivaminima.lemonsqueezy.com/checkout/buy/57973270-94ea-4cc7-bcb4-294693714087
+- Free tools: [skill-audit-kit](https://github.com/vivaminima/skill-audit-kit) · [secret-map](https://github.com/vivaminima/secret-map) · [inbox-ledger](https://github.com/vivaminima/inbox-ledger) · [release-gate](https://github.com/vivaminima/release-gate) · [skill-install-gate](https://github.com/vivaminima/skill-install-gate) · [console-safe](https://github.com/vivaminima/console-safe) · [checklist-stop](https://github.com/vivaminima/checklist-stop) · [handoff-check](https://github.com/vivaminima/handoff-check) · [llm-budget-router-lite](https://github.com/vivaminima/llm-budget-router-lite) · [go-no-go-verdict-skill](https://github.com/vivaminima/go-no-go-verdict-skill) · [ai-company-starter-kit](https://github.com/vivaminima/ai-company-starter-kit) · [beginner-readme-section](https://github.com/vivaminima/beginner-readme-section)
+
+Vivaminima is not affiliated with, endorsed by or sponsored by Anthropic.

@@ -11,6 +11,7 @@ new version (including a change back to earlier text); a broken input file is qu
 instead of stopping the run; a last line that was cut off mid-write is set aside in
 <ledger>.torn and ingest carries on in the same file; any other damage is never appended to -
 ingest stops and points at recover; concurrent runs are serialised with a lock file.
+When two or more ledgers sit in one folder, ingest and status end with one line that says how many.
 
 Standard library only. No network. Works on Windows, macOS and Linux.
 """
@@ -22,12 +23,13 @@ import datetime
 import hashlib
 import json
 import os
+import random
 import sys
 import time
 import unicodedata
 from pathlib import Path
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 REQUIRED_FIELDS = ("channel", "author", "message_id", "body")
 MAX_MESSAGE_BYTES = 5 * 1024 * 1024
 GENESIS = "0" * 64
@@ -76,28 +78,42 @@ class Lock:
         while True:
             try:
                 fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.write(fd, ("%d %s\n" % (os.getpid(), now_utc())).encode("ascii"))
-                os.close(fd)
-                self.held = True
-                return self
-            except FileExistsError:
+            except (FileExistsError, PermissionError):
+                # FileExistsError: another run holds the lock. PermissionError: on Windows the lock
+                # file of a run that is just finishing is "being deleted" for a moment and cannot be
+                # created yet. Both mean "wait and try again", never "fail now".
                 try:
                     age = time.time() - self.path.stat().st_mtime
                 except OSError:
-                    continue
+                    age = 0.0                               # it went away between the two calls
                 if age > self.stale_after:
                     raise LedgerError("stale lock file %s (%.0f s old); if no other run is active, delete it"
                                       % (self.path, age))
                 if time.monotonic() > deadline:
                     raise LedgerError("another run holds %s; gave up after %.0f s" % (self.path, self.wait))
-                time.sleep(0.05)
+                time.sleep(0.02 + random.random() * 0.06)   # uneven waits: runs do not retry in step
+                continue
+            try:
+                os.write(fd, ("%d %s\n" % (os.getpid(), now_utc())).encode("ascii"))
+            finally:
+                os.close(fd)
+            self.held = True
+            return self
 
     def __exit__(self, *exc):
         if self.held:
-            try:
-                self.path.unlink()
-            except OSError:
-                pass
+            # A lock that is not removed makes every later run wait and then give up, so try
+            # again for a few seconds when something (a scanner, another run looking at the
+            # file) has it open for a moment.
+            for attempt in range(100):
+                try:
+                    self.path.unlink()
+                    break
+                except FileNotFoundError:
+                    break
+                except OSError:
+                    time.sleep(0.05)
+            self.held = False
         return False
 
 
@@ -432,6 +448,44 @@ def recover(ledger, out):
     return {"kept_records": len(rebuilt) - 1, "dropped_lines": marker["dropped_lines"], "out": str(out)}
 
 
+def count_ledgers(ledger, limit=500):
+    """How many different ledgers sit in the folder of this one (itself included).
+
+    A ledger is a *.jsonl file whose first line is a sealed ledger record. A copy written by
+    recover counts together with the ledger it was made from, and a plain file copy counts
+    together with its original - neither is "another ledger".
+    Read-only; reads only the first line of each file.
+    """
+    folder = Path(ledger).resolve().parent
+    first_records = {}                                  # first record's hash -> the hash it was recovered from
+    try:
+        names = sorted(p for p in folder.iterdir() if p.name.lower().endswith(".jsonl"))[:limit]
+    except OSError:
+        return 0
+    for path in names:
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            with open(path, "rb") as handle:
+                first = handle.readline(1024 * 1024)
+            record = json.loads(first.decode("utf-8"))
+            if not isinstance(record, dict) or record.get("hash") != sha256_text(canonical(record)) \
+                    or "prev" not in record:
+                continue
+        except (OSError, ValueError, UnicodeDecodeError, TypeError):
+            continue
+        first_records[record["hash"]] = record.get("recovered_from_hash")
+    return sum(1 for parent in first_records.values() if parent is None or parent not in first_records)
+
+
+def ledgers_line(ledger):
+    """One closing line with the real number, only when two or more ledgers are there."""
+    found = count_ledgers(ledger)
+    if found < 2:
+        return None
+    return "%d ledgers found. Cross-window summary and mirror gap check are in the Pro report." % found
+
+
 # --------------------------------------------------------------------------- cli
 
 def safe_stdio():
@@ -450,6 +504,14 @@ def emit(data):
         print(text)
     except UnicodeEncodeError:
         sys.stdout.buffer.write((text + "\n").encode("utf-8", "replace"))
+
+
+def closing_line(ledger):
+    """Printed after the JSON, on stderr, so that stdout stays plain JSON for scripts."""
+    line = ledgers_line(ledger)
+    if line:
+        sys.stdout.flush()
+        print(line, file=sys.stderr)
 
 
 def main(argv=None):
@@ -473,6 +535,7 @@ def main(argv=None):
         if args.command == "ingest":
             result = ingest(args.inbox, args.ledger, args.authors.split(",") if args.authors else None, args.lock_wait)
             emit(result)
+            closing_line(args.ledger)
             return 0
         if args.command == "verify":
             if not Path(args.ledger).is_file():
@@ -485,6 +548,7 @@ def main(argv=None):
                 raise LedgerError("ledger does not exist: %s" % args.ledger)
             result = status(args.ledger)
             emit(result)
+            closing_line(args.ledger)
             return 0 if result["integrity"] == "OK" else 1
         emit(recover(args.ledger, args.out))
         return 0

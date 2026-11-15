@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.4
+- Lock: a run that is waiting for another run no longer fails on the first refusal. On Windows the lock file of a
+  run that is just finishing cannot be created for a moment ("access denied" instead of "file exists"); 1.0.3
+  treated that as an error and exited 2. Now it waits and tries again until `--lock-wait` runs out. Waits are
+  uneven, so runs do not retry in step.
+- Lock: the lock file is removed with retries. Before, one failed delete left the lock behind and every later run
+  waited and gave up.
+- No record is lost or written twice in either case: nothing is appended without the lock.
+- New closing line, only when the ledger's folder holds two or more ledgers: `N ledgers found. Cross-window
+  summary and mirror gap check are in the Pro report.` It goes to stderr after the JSON. Copies made by `recover`
+  or by copying the file are not counted. With one ledger nothing is printed.
+- Tests: 49 (was 37). Concurrent-run test repeated 30 times on Windows 11, Python 3.10.11: 30 of 30 passed.
 ## 1.0.3
 - A half-written last line (a run stopped mid-write) is now repaired automatically when it is the only damage.
   `ingest` saves the cut-off bytes to `<ledger>.torn` first (one JSON line per repair, the bytes in base64), cuts the
