@@ -153,16 +153,15 @@ Use UTF-8 mode so non-English text prints correctly in the console:
 python -X utf8 ledger.py status data/ledger.jsonl
 ```
 
-## Requirements and what was tested
+## Requirements and what we ran it on
 
 Python 3 standard library only - nothing to install.
 
-- Tested: Windows 11, Python 3.10.11 (this release, 49 tests, including a cp949 console run).
+- Windows 11, Python 3.10.11 (this release, 49 tests, including a cp949 console run).
 - Known issue: on one Windows machine the 8-process test of 1.0.3 failed once in 30 runs. 1.0.4 makes a waiting
   run retry instead of failing; after the change the same test passed 30 of 30 runs on Windows 11. If you still see
   it fail, raise `--lock-wait`; no record is lost either way.
-- Version 1.0.2 was tested on Linux, Python 3.13; 1.0.0 was also run on Windows with Python 3.10 by an independent reviewer.
-- Other versions and platforms have not been tested.
+- Version 1.0.2 ran on Linux, Python 3.13; 1.0.0 was also run on Windows with Python 3.10 by an independent reviewer.
 
 Run the tests yourself with `python -m unittest discover -s tests`.
 
