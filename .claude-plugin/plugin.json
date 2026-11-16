@@ -1,0 +1,17 @@
+{
+  "name": "inbox-ledger",
+  "description": "A receipt book for the folder your Claude windows use to pass notes: nothing counted twice, nothing lost, later edits detectable. One Python file, offline.",
+  "author": {
+    "name": "Vivaminima",
+    "url": "https://github.com/vivaminima"
+  },
+  "homepage": "https://vivastory4.gumroad.com/l/inbox-ledger-pro",
+  "repository": "https://github.com/vivaminima/inbox-ledger",
+  "license": "MIT",
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "cli",
+    "multi-agent"
+  ]
+}
