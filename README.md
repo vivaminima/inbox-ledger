@@ -4,6 +4,8 @@
 
 <img src="https://raw.githubusercontent.com/vivaminima/vivaminima/main/img/run/inbox-ledger.png" width="760" alt="inbox-ledger: real output of the free version on a made-up sample">
 
+**Install in Claude Code:** `/plugin install inbox-ledger --marketplace vivaminima/vivaminima`
+
 Turn a folder of JSON messages into an append-only log you can trust: nothing counted twice,
 nothing silently lost, and any later edit to the log is detectable.
 
